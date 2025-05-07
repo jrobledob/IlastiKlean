@@ -1,0 +1,18 @@
+Package: KleanLastic
+Type: Package
+Title: Synthetic Plant Data Simulation and Unified CSV Import
+Version: 0.1.0
+Authors@R: 
+  person("Jacobo", "Robledo", email = "jacoborobledobur@ufl.edu", role = c("aut", "cre"))
+Description: 
+  A toolkit for ({sim_Ilastik_output}) generating synthetic measurement datasets 
+  and ({read_and_clean_csvs}) reading and combining CSV outputs with clean column names.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+  readr,
+  purrr,
+  tibble,
+  dplyr
+RoxygenNote: 7.3.2
