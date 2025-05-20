@@ -19,7 +19,7 @@
 #'                         wor_dir = "./out")
 #' }
 #' @export
-sim_Ilastik_output <- function(samples, pictures, wor_dir= getwd()) {
+sim_Ilastik_output <- function(samples, pictures, wor_dir= "./") {
   # internal helper: simulate one data.frame for a sample/picture
   df_function1 <- function(class) {
     # create 3 objects with random measurements

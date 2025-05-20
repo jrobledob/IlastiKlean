@@ -2,6 +2,8 @@
 
 export(read_and_clean_csvs)
 export(sim_Ilastik_output)
+export(summarize_callose_data)
+export(visualize_and_analyze_callose)
 importFrom(purrr,map_df)
 importFrom(readr,cols)
 importFrom(readr,read_csv)

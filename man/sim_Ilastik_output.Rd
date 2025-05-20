@@ -4,7 +4,7 @@
 \alias{sim_Ilastik_output}
 \title{Generate and save synthetic plant datasets}
 \usage{
-sim_Ilastik_output(samples, pictures, wor_dir)
+sim_Ilastik_output(samples, pictures, wor_dir = "./")
 }
 \arguments{
 \item{samples}{Integer. Number of samples per plant.}
