@@ -1,19 +1,19 @@
-# KleanLastic <img src="https://img.shields.io/badge/R-package-blue" align="right"/>
+# IlastiKlean <img src="https://img.shields.io/badge/R-package-blue" align="right"/>
 
-**KleanLastic** is an R package that provides a streamlined toolkit for simulating, cleaning, analyzing, and visualizing image-based object classification data from pipelines such as Ilastik. It is especially designed for plant biologists and researchers who need a quick and reliable way to handle callose (or similar object) quantification across experimental groups.
+**IlastiKlean** is an R package that provides a streamlined toolkit for simulating, cleaning, analyzing, and visualizing image-based object classification data from pipelines such as Ilastik. It is especially designed for plant biologists and researchers who need a quick and reliable way to handle callose (or similar object) quantification across experimental groups.
 
 ------------------------------------------------------------------------
 
 ## 📦 Installation
 
-You can install the development version of KleanLastic directly from GitHub:
+You can install the development version of IlastiKlean directly from GitHub:
 
 ``` r
 # If you don't have devtools installed:
 install.packages("devtools")
 
-# Install KleanLastic
-devtools::install_github("jrobledob/KleanLastic")
+# Install IlastiKlean
+devtools::install_github("jrobledob/IlastiKlean")
 ```
 
 ------------------------------------------------------------------------
@@ -36,7 +36,7 @@ devtools::install_github("jrobledob/KleanLastic")
 
 ``` r
 # Load package
-library(KleanLastic)
+library(IlastiKlean)
 
 # 1. Simulate synthetic CSV files (3 samples × 3 images per sample)
 sim_Ilastik_output(samples = 3, pictures = 3, wor_dir = "./output")
@@ -112,7 +112,7 @@ MIT License. See `LICENSE` file for details.
 
 ## 🐛 Issues & Feedback
 
-Please submit bug reports, suggestions, or feature requests via the [Issues page](https://github.com/jrobledob/KleanLastic/issues).
+Please submit bug reports, suggestions, or feature requests via the [Issues page](https://github.com/jrobledob/IlastiKlean/issues).
 
 ------------------------------------------------------------------------
 
