@@ -2,45 +2,82 @@
 % Please edit documentation in R/visualize_and_analyze_callose.R
 \name{visualize_and_analyze_callose}
 \alias{visualize_and_analyze_callose}
-\title{Visualize and Analyze Callose Count Data}
+\title{Visualise and analyse callose‑count data (≥ 2 treatment groups)}
 \usage{
 visualize_and_analyze_callose(
   df,
   group_col = "plant",
   count_col = "callose_count",
-  boxplot_filename = "count_box_plot.png"
+  boxplot_filename = NULL,
+  alpha = 0.05,
+  show_plots = TRUE,
+  verbose = TRUE
 )
 }
 \arguments{
-\item{df}{A dataframe containing summary callose count data, such as the output from \code{summarize_callose_data()}.}
+\item{df}{A \code{data.frame} containing the response and grouping columns.}
 
-\item{group_col}{The name of the grouping variable (typically "plant").}
+\item{group_col}{Character, column that defines treatment groups.
+\emph{Default}: \code{"plant"}.}
 
-\item{count_col}{The name of the column containing callose counts (typically "callose_count").}
+\item{count_col}{Character, column with callose counts.
+\emph{Default}: \code{"callose_count"}.}
 
-\item{boxplot_filename}{Optional. File path to save the generated boxplot (e.g., "count_box_plot.png").}
+\item{boxplot_filename}{Optional \code{.png} path; if non‑\code{NULL}, the box‑plot is
+exported with \code{ggplot2::ggsave()}.  \emph{Default}: \code{NULL}.}
+
+\item{alpha}{Numeric, α‑level for assumption tests.  \emph{Default}: \code{0.05}.}
+
+\item{show_plots}{Logical, draw the box‑plot + histogram to the active
+device?  \emph{Default}: \code{TRUE}.}
+
+\item{verbose}{Logical, print informative messages?  \emph{Default}: \code{TRUE}.}
 }
 \value{
-A list containing:
-\item{plot}{The ggplot2 object of the boxplot.}
-\item{shapiro}{The result of the Shapiro-Wilk normality test.}
-\item{test_result}{The result of the t-test or Wilcoxon test.}
+(Invisibly) a named list with
+\describe{
+\item{\code{plot}}{\code{ggplot} object of the box‑plot.}
+\item{\code{shapiro}}{Shapiro–Wilk test (\code{htest}).}
+\item{\code{levene}}{Levene test (\code{anova}) — only if ≥ 3 groups.}
+\item{\code{test_result}}{Main significance test.}
+\item{\code{posthoc}}{Post‑hoc comparisons — only if ≥ 3 groups.}
+}
 }
 \description{
-This function creates visualizations (boxplot and histogram) of callose count data
-and performs statistical analysis to compare two plant groups. The function first
-checks if the callose counts follow a normal distribution using the Shapiro-Wilk test.
-If they do, a Welch two-sample t-test is performed. If not, a non-parametric
-Wilcoxon rank-sum test is used.
+Draws a box‑plot, checks distributional assumptions, and chooses the
+correct significance test: Welch \emph{t} / Wilcoxon for \strong{2} groups, or
+one‑way ANOVA + Tukey \strong{vs.} Kruskal–Wallis + Dunn for \strong{≥ 3} groups.
+Progress messages are written to the Console; graphics can be shown or
+suppressed via the \code{show_plots} switch.
 }
-\examples{
-\dontrun{
-analysis_result <- visualize_and_analyze_callose(
-  df = full_summary,
-  group_col = "plant",
-  count_col = "callose_count",
-  boxplot_filename = "count_box_plot.png"
-)
+\details{
+\subsection{Run‑time dependencies}{
+\itemize{
+\item \strong{ggplot2} – plotting & file export
+\item \strong{dplyr}   – tidy helpers (example only)
+\item \strong{car}     – \code{leveneTest()}
+\item \strong{multcomp} – \code{glht()} + \code{mcp()} for Tukey contrasts
+\item \strong{FSA}     – \code{dunnTest()} for non‑parametric post‑hoc
 }
 
+Declare these in your \strong{DESCRIPTION} under \strong{Imports:} and omit any
+\code{library()} calls inside the package code.
+}
+}
+\examples{
+if (requireNamespace("palmerpenguins", quietly = TRUE)) {
+  library(dplyr)
+  dat <- palmerpenguins::penguins \%>\%
+    filter(!is.na(flipper_length_mm)) \%>\%
+    select(species, flipper_length_mm)
+
+  res <- visualize_and_analyze_callose(dat,
+                                       group_col  = "species",
+                                       count_col  = "flipper_length_mm")
+  # Console: progress + ANOVA/Tukey summaries
+  res$test_result
+  summary(res$posthoc)
+  # Re‑draw the box‑plot later
+  print(res$plot)
+}
 }

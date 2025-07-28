@@ -1,92 +1,199 @@
-#' Visualize and Analyze Callose Count Data
+#' Visualise and analyse callose‑count data (≥ 2 treatment groups)
 #'
-#' This function creates visualizations (boxplot and histogram) of callose count data
-#' and performs statistical analysis to compare two plant groups. The function first
-#' checks if the callose counts follow a normal distribution using the Shapiro-Wilk test.
-#' If they do, a Welch two-sample t-test is performed. If not, a non-parametric
-#' Wilcoxon rank-sum test is used.
+#' Draws a box‑plot, checks distributional assumptions, and chooses the
+#' correct significance test: Welch *t* / Wilcoxon for **2** groups, or
+#' one‑way ANOVA + Tukey **vs.** Kruskal–Wallis + Dunn for **≥ 3** groups.
+#' Progress messages are written to the Console; graphics can be shown or
+#' suppressed via the `show_plots` switch.
 #'
-#' @param df A dataframe containing summary callose count data, such as the output from \code{summarize_callose_data()}.
-#' @param group_col The name of the grouping variable (typically "plant").
-#' @param count_col The name of the column containing callose counts (typically "callose_count").
-#' @param boxplot_filename Optional. File path to save the generated boxplot (e.g., "count_box_plot.png").
+#' ## Run‑time dependencies
+#' * **ggplot2** – plotting & file export
+#' * **dplyr**   – tidy helpers (example only)
+#' * **car**     – `leveneTest()`
+#' * **multcomp** – `glht()` + `mcp()` for Tukey contrasts
+#' * **FSA**     – `dunnTest()` for non‑parametric post‑hoc
 #'
-#' @return A list containing:
-#' \item{plot}{The ggplot2 object of the boxplot.}
-#' \item{shapiro}{The result of the Shapiro-Wilk normality test.}
-#' \item{test_result}{The result of the t-test or Wilcoxon test.}
+#' Declare these in your **DESCRIPTION** under **Imports:** and omit any
+#' `library()` calls inside the package code.
 #'
-#' @examples
-#' \dontrun{
-#' analysis_result <- visualize_and_analyze_callose(
-#'   df = full_summary,
-#'   group_col = "plant",
-#'   count_col = "callose_count",
-#'   boxplot_filename = "count_box_plot.png"
-#' )
+#' @param df   A `data.frame` containing the response and grouping columns.
+#' @param group_col  Character, column that defines treatment groups.
+#'                   *Default*: `"plant"`.
+#' @param count_col  Character, column with callose counts.
+#'                   *Default*: `"callose_count"`.
+#' @param boxplot_filename Optional `.png` path; if non‑`NULL`, the box‑plot is
+#'        exported with `ggplot2::ggsave()`.  *Default*: `NULL`.
+#' @param alpha  Numeric, α‑level for assumption tests.  *Default*: `0.05`.
+#' @param show_plots Logical, draw the box‑plot + histogram to the active
+#'        device?  *Default*: `TRUE`.
+#' @param verbose    Logical, print informative messages?  *Default*: `TRUE`.
+#'
+#' @return (Invisibly) a named list with
+#' \describe{
+#'   \item{`plot`}{`ggplot` object of the box‑plot.}
+#'   \item{`shapiro`}{Shapiro–Wilk test (`htest`).}
+#'   \item{`levene`}{Levene test (`anova`) — only if ≥ 3 groups.}
+#'   \item{`test_result`}{Main significance test.}
+#'   \item{`posthoc`}{Post‑hoc comparisons — only if ≥ 3 groups.}
 #' }
 #'
+#' @import ggplot2
+#' @importFrom car leveneTest
+#' @importFrom multcomp glht mcp
+#' @importFrom FSA dunnTest
+#' @importFrom stats aov kruskal.test lm resid shapiro.test t.test wilcox.test
+#' @importFrom graphics hist
+#' @examples
+#' if (requireNamespace("palmerpenguins", quietly = TRUE)) {
+#'   library(dplyr)
+#'   dat <- palmerpenguins::penguins %>%
+#'     filter(!is.na(flipper_length_mm)) %>%
+#'     select(species, flipper_length_mm)
+#'
+#'   res <- visualize_and_analyze_callose(dat,
+#'                                        group_col  = "species",
+#'                                        count_col  = "flipper_length_mm")
+#'   # Console: progress + ANOVA/Tukey summaries
+#'   res$test_result
+#'   summary(res$posthoc)
+#'   # Re‑draw the box‑plot later
+#'   print(res$plot)
+#' }
 #' @export
 visualize_and_analyze_callose <- function(df,
-                                          group_col = "plant",
-                                          count_col = "callose_count",
-                                          boxplot_filename = "count_box_plot.png") {
-  require(ggplot2)
-  require(dplyr)
-  
-  # ---- Boxplot ----
-  cat("Generating boxplot...\n")
+                                          group_col        = "plant",
+                                          count_col        = "callose_count",
+                                          boxplot_filename = NULL,
+                                          alpha            = 0.05,
+                                          show_plots       = TRUE,
+                                          verbose          = TRUE) {
+
+  ## ------------ helper for conditional messaging -----------------------
+  vcat <- function(..., .verbose = TRUE) {
+    if (isTRUE(.verbose)) message(..., appendLF = TRUE)
+  }
+
+  ## ------------ basic checks & prep ------------------------------------
+  if (!all(c(group_col, count_col) %in% names(df)))
+    stop("Columns '", group_col, "' and/or '", count_col,
+         "' not found in 'df'.")
+
   df[[group_col]] <- as.factor(df[[group_col]])
-  
-  plot <- ggplot(data = df, aes_string(x = group_col, y = count_col, fill = group_col)) +
-    geom_boxplot(width = 0.5, linewidth = 0.9) +
-    theme_bw(24) +
-    labs(x = "Plant Number", y = "Mean callose deposit \ncount") +
-    theme(
-      plot.title = element_text(hjust = 0.5),
-      plot.subtitle = element_text(hjust = 0.4),
-      legend.position = "none"
-    ) +
-    scale_fill_manual(values = c("#D81B60", "#004D40"))
-  
-  print(plot)
-  
-  # ---- Save boxplot ----
+  k <- nlevels(df[[group_col]])
+
+  vcat("Groups detected: ", k, " (", paste(levels(df[[group_col]]),
+                                           collapse = ", "), ").", .verbose = verbose)
+
+  ## ------------ box‑plot ------------------------------------------------
+  vcat("Building box‑plot …", .verbose = verbose)
+  box <- ggplot2::ggplot(
+    df,
+    ggplot2::aes(x = .data[[group_col]],
+                 y = .data[[count_col]],
+                 fill = .data[[group_col]])) +
+    ggplot2::geom_boxplot(width = .5, linewidth = .9) +
+    ggplot2::theme_bw(24) +
+    ggplot2::theme(legend.position = "none") +
+    ggplot2::labs(x = group_col, y = count_col) +
+    ggplot2::scale_fill_brewer(palette = "Set2")
+
+  if (isTRUE(show_plots)) print(box)
+
   if (!is.null(boxplot_filename)) {
-    cat(paste("Saving boxplot to:", boxplot_filename, "\n"))
-    ggsave(filename = boxplot_filename, plot = plot, width = 5, height = 5, dpi = 300, units = "in", device = 'png')
+    vcat("Saving box‑plot → ", boxplot_filename, .verbose = verbose)
+    ggplot2::ggsave(filename = boxplot_filename, plot = box,
+                    width = 5, height = 5, dpi = 300, units = "in")
   }
-  
-  # ---- Histogram ----
-  cat("Displaying histogram of callose counts...\n")
-  hist(df[[count_col]], main = "Histogram of Callose Counts", xlab = "Callose Count")
-  
-  # ---- Shapiro-Wilk test ----
-  cat("Running Shapiro-Wilk test for normality...\n")
-  shapiro_result <- shapiro.test(df[[count_col]])
-  print(shapiro_result)
-  
-  # ---- Statistical test ----
-  unique_groups <- length(unique(df[[group_col]]))
-  
-  if (unique_groups != 2) {
-    stop("This function currently supports only two groups for statistical comparison.")
+
+  ## ------------ histogram ----------------------------------------------
+  if (isTRUE(show_plots)) {
+    vcat("Drawing histogram …", .verbose = verbose)
+    graphics::hist(df[[count_col]],
+                   main = "Histogram of Callose Counts",
+                   xlab = count_col)
   }
-  
-  if (shapiro_result$p.value > 0.05) {
-    cat("Normality assumption met (p >", round(shapiro_result$p.value, 4), "). Running Welch's t-test...\n")
-    test_result <- t.test(as.formula(paste(count_col, "~", group_col)), data = df)
+
+  ## ------------ choose test route --------------------------------------
+  if (k == 2) {                          # ---------- two groups ----------
+    vcat("Testing normality on raw data …", .verbose = verbose)
+    shapiro_res <- stats::shapiro.test(df[[count_col]])
+
+    if (isTRUE(verbose))
+      print(shapiro_res)
+
+    if (shapiro_res$p.value > alpha) {
+      vcat("Normal ⇒ Welch's two‑sample t‑test", .verbose = verbose)
+      test_main <- stats::t.test(
+        stats::as.formula(paste(count_col, "~", group_col)),
+        data = df)
+    } else {
+      vcat("Non‑normal ⇒ Wilcoxon rank‑sum test", .verbose = verbose)
+      test_main <- stats::wilcox.test(
+        stats::as.formula(paste(count_col, "~", group_col)),
+        data = df, exact = FALSE)
+    }
+
+    if (isTRUE(verbose)) print(test_main)
+
+    out <- list(plot = box,
+                shapiro = shapiro_res,
+                test_result = test_main)
+
+  } else if (k > 2) {                    # ---------- ≥ three groups ------
+    vcat("Fitting linear model …", .verbose = verbose)
+    fit        <- stats::lm(
+      stats::as.formula(paste(count_col, "~", group_col)),
+      data = df)
+    resid_vals <- stats::resid(fit)
+
+    vcat("Testing residual normality …", .verbose = verbose)
+    shapiro_res <- stats::shapiro.test(resid_vals)
+    if (isTRUE(verbose)) print(shapiro_res)
+
+    vcat("Testing homogeneity (Levene) …", .verbose = verbose)
+    levene_res <- car::leveneTest(
+      stats::as.formula(paste(count_col, "~", group_col)),
+      data = df, center = median)
+    if (isTRUE(verbose)) print(levene_res)
+
+    normal   <- shapiro_res$p.value > alpha
+    homosked <- levene_res[[3]][1]   > alpha  # p‑value in col 3, row 1
+
+    if (normal && homosked) {         # --- parametric path --------------
+      vcat("Assumptions met ⇒ one‑way ANOVA + Tukey HSD", .verbose = verbose)
+      test_main <- stats::aov(fit)
+
+      # Build named list programmatically: list(species = "Tukey")
+      tukey_list <- setNames(list("Tukey"), group_col)
+      linf       <- do.call(multcomp::mcp, tukey_list)
+      posthoc    <- multcomp::glht(test_main, linfct = linf)
+
+    } else {                           # --- non‑parametric path ----------
+      vcat("Assumptions violated ⇒ Kruskal–Wallis + Dunn", .verbose = verbose)
+      test_main <- stats::kruskal.test(
+        stats::as.formula(paste(count_col, "~", group_col)),
+        data = df)
+      posthoc   <- FSA::dunnTest(
+        stats::as.formula(paste(count_col, "~", group_col)),
+        data   = df,
+        method = "bonferroni")
+    }
+
+    if (isTRUE(verbose)) {
+      print(test_main)
+      vcat("--- Post‑hoc comparisons ---", .verbose = TRUE)
+      print(summary(posthoc))
+    }
+
+    out <- list(plot        = box,
+                shapiro     = shapiro_res,
+                levene      = levene_res,
+                test_result = test_main,
+                posthoc     = posthoc)
+
   } else {
-    cat("Normality assumption NOT met (p <", round(shapiro_result$p.value, 4), "). Running Wilcoxon rank-sum test...\n")
-    test_result <- wilcox.test(as.formula(paste(count_col, "~", group_col)), data = df, exact = FALSE)
+    stop("Grouping variable '", group_col, "' must have ≥ 2 levels.")
   }
-  
-  print(test_result)
-  
-  # ---- Return results ----
-  return(list(
-    plot = plot,
-    shapiro = shapiro_result,
-    test_result = test_result
-  ))
+
+  invisible(out)
 }
