@@ -1,3 +1,6 @@
 ^KleanLasticV2\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^vignettes/.*\.html$
+^doc$
+^Meta$
